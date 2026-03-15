@@ -397,9 +397,9 @@ const ClearCutCV = (() => {
     // Suppress periodic peaks
     suppressPeriodicPeaks(complexMat, peakRadius, sensitivity);
 
-    // Inverse DFT
+    // Inverse DFT — cv.idft is not exposed in OpenCV.js; use cv.dft with DFT_INVERSE instead
     const iDft = new cv.Mat();
-    cv.idft(complexMat, iDft, cv.DFT_SCALE | cv.DFT_REAL_OUTPUT);
+    cv.dft(complexMat, iDft, cv.DFT_INVERSE | cv.DFT_SCALE | cv.DFT_REAL_OUTPUT);
 
     // Crop back to original size
     const cropped = iDft.roi(new cv.Rect(0, 0, grayMat.cols, grayMat.rows));
