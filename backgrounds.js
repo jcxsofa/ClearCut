@@ -112,6 +112,35 @@ const ClearCutBG = (() => {
 
   // ── Pattern generators ────────────────────────────────────────────────────
 
+  // Default crosshatch pitches (mm).  Ratio ≈ 0.625 (close to golden ratio);
+  // the two incommensurate frequencies mean FFT peaks never overlap.
+  const CROSSHATCH_H_PITCH = 3.969;   // 15 px @ 96 dpi → ~3.97 mm  (≈ 15 px at screen res)
+  const CROSSHATCH_V_PITCH = 6.350;   // 24 px @ 96 dpi → ~6.35 mm  (≈ 24 px at screen res)
+
+  /**
+   * Crosshatch pattern — two families of parallel lines at different pitches.
+   * hPitch controls horizontal-line spacing, vPitch controls vertical-line spacing.
+   * Default pitches are Fibonacci-adjacent (15 px / 24 px at 96 dpi).
+   */
+  function generateCrosshatchSVG(hPitch = CROSSHATCH_H_PITCH, vPitch = CROSSHATCH_V_PITCH) {
+    const lw   = 0.3;   // line width mm
+    const patX = MARGIN;
+    const patY = MARGIN;
+    const patW = VW - 2 * MARGIN;
+    const patH = VH - 2 * MARGIN;
+
+    let lines = '';
+    // Horizontal lines (spaced vPitch mm apart)
+    for (let y = patY; y <= patY + patH; y += vPitch) {
+      lines += `<line x1="${patX.toFixed(2)}" y1="${y.toFixed(2)}" x2="${(patX + patW).toFixed(2)}" y2="${y.toFixed(2)}" stroke="#444" stroke-width="${lw}" />`;
+    }
+    // Vertical lines (spaced hPitch mm apart)
+    for (let x = patX; x <= patX + patW; x += hPitch) {
+      lines += `<line x1="${x.toFixed(2)}" y1="${patY.toFixed(2)}" x2="${x.toFixed(2)}" y2="${(patY + patH).toFixed(2)}" stroke="#444" stroke-width="${lw}" />`;
+    }
+    return wrapSVG(lines);
+  }
+
   /**
    * Bold alternating vertical stripes (1 cm wide).
    */
@@ -221,9 +250,13 @@ const ClearCutBG = (() => {
         svgStr   = generateDotGridSVG();
         filename = 'ClearCut-dotgrid.svg';
         break;
-      default:
+      case 'stripes':
         svgStr   = generateStripesSVG();
         filename = 'ClearCut-stripes.svg';
+        break;
+      default: // crosshatch
+        svgStr   = generateCrosshatchSVG();
+        filename = 'ClearCut-crosshatch.svg';
     }
 
     const blob = svgToPdfBlob(svgStr);
@@ -275,6 +308,22 @@ const ClearCutBG = (() => {
         </svg>`;
         break;
       }
+      case 'crosshatch': {
+        // Preview with two pitches: 7 px vertical spacing, 11 px horizontal spacing
+        const vP = 7; const hP = 11;
+        let lines = '';
+        for (let y = 0; y <= H; y += vP) {
+          lines += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#444" stroke-width="0.5"/>`;
+        }
+        for (let x = 0; x <= W; x += hP) {
+          lines += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#444" stroke-width="0.5"/>`;
+        }
+        svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" height="100%">
+          <rect width="${W}" height="${H}" fill="white"/>
+          ${lines}
+        </svg>`;
+        break;
+      }
       default: { // stripes
         const sw = 8;
         let rects = '';
@@ -296,8 +345,11 @@ const ClearCutBG = (() => {
     generateStripesSVG,
     generateCheckerboardSVG,
     generateDotGridSVG,
+    generateCrosshatchSVG,
     downloadBackground,
     renderPatternPreview,
+    CROSSHATCH_H_PITCH,
+    CROSSHATCH_V_PITCH,
   };
 
 })();

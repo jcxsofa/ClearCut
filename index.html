@@ -116,10 +116,15 @@
         <div class="print-panel-content">
           <div class="pattern-options">
             <label class="pattern-card">
-              <input type="radio" name="pattern" value="stripes" checked />
+              <input type="radio" name="pattern" value="crosshatch" checked />
+              <div class="pattern-preview" id="preview-crosshatch"></div>
+              <strong>Crosshatch</strong>
+              <span class="recommended-label">⭐ Recommended</span>
+            </label>
+            <label class="pattern-card">
+              <input type="radio" name="pattern" value="stripes" />
               <div class="pattern-preview" id="preview-stripes"></div>
               <strong>Bold Stripes</strong>
-              <span>Recommended</span>
             </label>
             <label class="pattern-card">
               <input type="radio" name="pattern" value="checkerboard" />
@@ -133,7 +138,25 @@
             </label>
           </div>
           <p class="print-tip">💡 Print at <strong>100% scale</strong> — do not scale to fit page.</p>
+          <p class="print-tip">💡 Crosshatch uses two different line spacings so FFT peaks from each family never overlap — better separation than single-frequency patterns.</p>
           <button class="btn-secondary" id="btn-download-bg">⬇ Download PDF to Print</button>
+        </div>
+      </details>
+
+      <!-- Scan settings guidance -->
+      <details class="scan-guidance" id="scan-guidance">
+        <summary>📄 Recommended scan settings</summary>
+        <div class="scan-guidance-content">
+          <table class="scan-settings-table">
+            <tbody>
+              <tr><th>Resolution</th><td><strong>600 DPI</strong> — sweet spot for FFT peak sharpness; higher wastes processing time</td></tr>
+              <tr><th>Color mode</th><td><strong>Color</strong> (not Grayscale — preserves item colour for export)</td></tr>
+              <tr><th>File format</th><td>PDF or JPEG</td></tr>
+              <tr><th>Auto-crop / Auto-rotate</th><td><strong>OFF</strong></td></tr>
+              <tr><th>Auto colour correction</th><td><strong>OFF</strong> — scanner "enhancements" destroy the periodic pattern the FFT relies on</td></tr>
+              <tr><th>Placement</th><td>Items flat, no overlapping, no shadows</td></tr>
+            </tbody>
+          </table>
         </div>
       </details>
 
@@ -155,6 +178,7 @@
       <div class="controls-row mt">
         <label>Selected pattern:
           <select id="scan-pattern-select">
+            <option value="crosshatch" selected>Crosshatch (Recommended)</option>
             <option value="stripes">Bold Stripes</option>
             <option value="checkerboard">Checkerboard</option>
             <option value="dotgrid">Dot Grid</option>
@@ -279,6 +303,43 @@
             <span class="ctrl-hint">Stddevs above mean to classify a frequency spike as a pattern peak</span>
           </label>
 
+          <!-- New: morphKernel slider (replaces noise cleanup — both method) -->
+          <label class="control-item" id="ctrl-morph-wrap">
+            <span>Cleanup radius</span>
+            <input type="range" id="ctrl-morph-kernel" min="2" max="15" value="5" step="1" />
+            <span id="ctrl-morph-kernel-val">5 px</span>
+            <span class="ctrl-hint">Morphological kernel radius — removes speckle &amp; fills small holes</span>
+          </label>
+
+          <!-- New: minArea number input -->
+          <label class="control-item" id="ctrl-min-area-adv-wrap">
+            <span>Minimum shape size (px²)</span>
+            <input type="number" id="ctrl-min-area-adv" min="50" max="5000" value="500" step="50" />
+            <span class="ctrl-hint">Shapes smaller than this are ignored</span>
+          </label>
+
+          <!-- New: dcGuard (advanced) -->
+          <label class="control-item" id="ctrl-dc-guard-wrap">
+            <span>DC guard radius <span class="badge badge-b">B</span></span>
+            <input type="range" id="ctrl-dc-guard" min="5" max="30" value="10" step="1" />
+            <span id="ctrl-dc-guard-val">10 px</span>
+            <span class="ctrl-hint">Frequency-domain region around DC (0,0) that is never suppressed</span>
+          </label>
+
+          <!-- New: pitch display (read-only, pulled from background generator) -->
+          <div class="control-item" id="ctrl-pitch-display-wrap">
+            <span>Background pitch (for reference) <span class="badge badge-b">B</span></span>
+            <div class="pitch-display-row">
+              <span class="pitch-label">Horizontal line pitch:</span>
+              <span id="pitch-h-val" class="pitch-value">—</span>
+              <span class="pitch-label">Vertical line pitch:</span>
+              <span id="pitch-v-val" class="pitch-value">—</span>
+            </div>
+            <div id="fft-peak-overlap-warning" class="fft-overlap-warning hidden">
+              ⚠️ Suppression radius is larger than half the stripe pitch — circles may overlap and remove image content.
+            </div>
+          </div>
+
           <!-- FFT spectrum debug view -->
           <div class="control-item" id="ctrl-fft-debug-wrap">
             <details class="fft-debug-panel" id="fft-debug-panel">
@@ -310,6 +371,14 @@
 
         </div>
       </details>
+
+      <!-- Progress indicator -->
+      <div id="detection-progress" class="detection-progress hidden">
+        <div class="progress-bar-track">
+          <div id="progress-fill" class="progress-bar-fill"></div>
+        </div>
+        <p id="progress-label" class="progress-label">Preparing…</p>
+      </div>
 
       <div class="canvas-container" id="canvas-container">
         <canvas id="preview-canvas"></canvas>

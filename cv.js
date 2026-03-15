@@ -109,6 +109,15 @@ const ClearCutCV = (() => {
   // ── Method A: Two-Shot Subtraction ────────────────────────────────────────
 
   /**
+   * Yield control to the browser so the UI can repaint, then run fn().
+   * Returns a Promise resolving to fn()'s return value.
+   */
+  async function yieldThen(fn) {
+    await new Promise(r => setTimeout(r, 0));
+    return fn();
+  }
+
+  /**
    * Attempt ORB-based homography alignment.
    * Returns a warped version of bgMat aligned to itemsMat,
    * or null if alignment fails (too few matches).
@@ -190,29 +199,35 @@ const ClearCutCV = (() => {
    * @param {HTMLImageElement} bgImgEl    – photo of empty background
    * @param {HTMLImageElement} itemsImgEl – photo with items on background
    * @param {object}           options
-   * @returns {Array} contours
+   * @param {Function}         [onProgress(step, total, message)]
+   * @returns {Promise<Array>} contours
    */
-  function detectMethodA(bgImgEl, itemsImgEl, options = {}) {
+  async function detectMethodA(bgImgEl, itemsImgEl, options = {}, onProgress = null) {
     const { threshold = 30, minArea = 500, smoothEpsilon = 2, morphKernel = 5 } = options;
+    const prog = onProgress || (() => {});
 
-    const bgMat    = imgToMat(bgImgEl);
+    prog(1, 4, '[1/4] Loading images…');
+    const bgMat    = await yieldThen(() => imgToMat(bgImgEl));
     const itemsMat = imgToMat(itemsImgEl);
 
     // Resize bg to match items image if needed
     const bgResized = matchSize(bgMat, itemsMat);
     if (bgResized !== bgMat) bgMat.delete();
 
-    // Try alignment
-    let alignedBg = tryAlignImages(bgResized, itemsMat);
+    prog(2, 4, '[2/4] Aligning photos…');
+    let alignedBg = await yieldThen(() => tryAlignImages(bgResized, itemsMat));
     let alignmentFailed = false;
     if (!alignedBg) {
       alignedBg = bgResized;
       alignmentFailed = true;
     }
 
-    // Pixel-difference
-    const diff = new cv.Mat();
-    cv.absdiff(alignedBg, itemsMat, diff);
+    prog(3, 4, '[3/4] Subtracting background…');
+    const diff = await yieldThen(() => {
+      const d = new cv.Mat();
+      cv.absdiff(alignedBg, itemsMat, d);
+      return d;
+    });
 
     const diffGray = new cv.Mat();
     cv.cvtColor(diff, diffGray, cv.COLOR_BGR2GRAY);
@@ -221,7 +236,8 @@ const ClearCutCV = (() => {
     const mask = new cv.Mat();
     cv.threshold(diffGray, mask, threshold, 255, cv.THRESH_BINARY);
 
-    const contours = extractContours(mask, { minArea, smoothEpsilon, morphKernel });
+    prog(4, 4, '[4/4] Finding shapes…');
+    const contours = await yieldThen(() => extractContours(mask, { minArea, smoothEpsilon, morphKernel }));
 
     // Clean up
     [bgResized, itemsMat, diff, diffGray, mask].forEach(m => {
@@ -287,13 +303,13 @@ const ClearCutCV = (() => {
    * @param {cv.Mat} complexMat   – modified in-place (2-channel CV_32F, unshifted)
    * @param {number} peakRadius   – radius of the zeroing circle around each peak
    * @param {number} sensitivity  – stddevs above mean to classify as a peak
+   * @param {number} dcGuard      – radius around DC to leave untouched
    */
-  function suppressPeriodicPeaks(complexMat, peakRadius = 12, sensitivity = 3) {
+  function suppressPeriodicPeaks(complexMat, peakRadius = 12, sensitivity = 3, dcGuard = 10) {
     const W = complexMat.cols;
     const H = complexMat.rows;
     const cx = Math.floor(W / 2);
     const cy = Math.floor(H / 2);
-    const dcGuard = 10;   // pixels from DC to ignore
 
     // Build shifted log-magnitude
     const mag = computeMagnitudeSpectrum(complexMat);
@@ -401,7 +417,8 @@ const ClearCutCV = (() => {
    * @returns {cv.Mat} binary mask (caller must delete)
    */
   function removePatternFFT(grayMat, peakRadius = 12, sensitivity = 3,
-                            debugCanvasBefore = null, debugCanvasAfter = null) {
+                            debugCanvasBefore = null, debugCanvasAfter = null,
+                            dcGuard = 10) {
     // Pad to optimal DFT size
     const optW = cv.getOptimalDFTSize(grayMat.cols);
     const optH = cv.getOptimalDFTSize(grayMat.rows);
@@ -431,7 +448,7 @@ const ClearCutCV = (() => {
     }
 
     // Suppress periodic peaks
-    suppressPeriodicPeaks(complexMat, peakRadius, sensitivity);
+    suppressPeriodicPeaks(complexMat, peakRadius, sensitivity, dcGuard);
 
     // Debug: render post-suppression spectrum
     if (debugCanvasAfter) {
@@ -479,10 +496,11 @@ const ClearCutCV = (() => {
    * Falls back to Gaussian blur heuristic when useFFT is false.
    *
    * @param {HTMLImageElement} scanImgEl
-   * @param {'stripes'|'checkerboard'|'dotgrid'} pattern
+   * @param {'stripes'|'checkerboard'|'dotgrid'|'crosshatch'} pattern
    * @param {object} options
+   * @param {Function} [onProgress(step, total, message)]
    */
-  function detectMethodB(scanImgEl, pattern, options = {}) {
+  async function detectMethodB(scanImgEl, pattern, options = {}, onProgress = null) {
     const {
       threshold      = 30,
       minArea        = 500,
@@ -492,35 +510,51 @@ const ClearCutCV = (() => {
       useFFT         = true,
       fftPeakRadius  = 12,
       fftSensitivity = 3,
+      dcGuard        = 10,
       fftDebugCanvasBefore = null,
       fftDebugCanvasAfter  = null,
     } = options;
 
-    const src  = imgToMat(scanImgEl);
-    const gray = new cv.Mat();
-    cv.cvtColor(src, gray, cv.COLOR_BGR2GRAY);
+    const prog = onProgress || (() => {});
+
+    prog(1, 5, '[1/5] Loading image…');
+    const src  = await yieldThen(() => imgToMat(scanImgEl));
+
+    prog(2, 5, '[2/5] Converting to greyscale…');
+    const gray = await yieldThen(() => {
+      const g = new cv.Mat();
+      cv.cvtColor(src, g, cv.COLOR_BGR2GRAY);
+      return g;
+    });
 
     let mask;
 
     if (useFFT) {
-      // FFT-based pattern removal
-      mask = removePatternFFT(gray, fftPeakRadius, fftSensitivity,
-                              fftDebugCanvasBefore, fftDebugCanvasAfter);
+      prog(3, 5, '[3/5] Running FFT — removing background pattern…');
+      mask = await yieldThen(() =>
+        removePatternFFT(gray, fftPeakRadius, fftSensitivity,
+                         fftDebugCanvasBefore, fftDebugCanvasAfter, dcGuard)
+      );
     } else {
-      // Legacy Gaussian-blur heuristic
-      const binary = new cv.Mat();
-      cv.adaptiveThreshold(gray, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 8);
-      const blurred = new cv.Mat();
-      const kernelSize = Math.max(11, blurRadius * 2 + 1) | 1;
-      cv.GaussianBlur(binary, blurred, new cv.Size(kernelSize, kernelSize), 0);
-      mask = new cv.Mat();
-      cv.threshold(blurred, mask, threshold, 255, cv.THRESH_BINARY);
-      binary.delete();
-      blurred.delete();
+      prog(3, 5, '[3/5] Masking background pattern (Gaussian fallback)…');
+      mask = await yieldThen(() => {
+        const binary = new cv.Mat();
+        cv.adaptiveThreshold(gray, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 8);
+        const blurred = new cv.Mat();
+        const kernelSize = Math.max(11, blurRadius * 2 + 1) | 1;
+        cv.GaussianBlur(binary, blurred, new cv.Size(kernelSize, kernelSize), 0);
+        const m = new cv.Mat();
+        cv.threshold(blurred, m, threshold, 255, cv.THRESH_BINARY);
+        binary.delete();
+        blurred.delete();
+        return m;
+      });
     }
 
-    const contours = extractContours(mask, { minArea, smoothEpsilon, morphKernel });
+    prog(4, 5, '[4/5] Finding shapes…');
+    const contours = await yieldThen(() => extractContours(mask, { minArea, smoothEpsilon, morphKernel }));
 
+    prog(5, 5, '[5/5] Done.');
     [src, gray, mask].forEach(m => { try { m.delete(); } catch (_) {} });
     return contours;
   }
@@ -533,14 +567,18 @@ const ClearCutCV = (() => {
    * @param {{r,g,b}}          bgColor   – background color to remove
    * @param {number}           tolerance – HSV hue tolerance (0-180 scale)
    * @param {object}           options
+   * @param {Function}         [onProgress(step, total, message)]
    */
-  function detectMethodC(imgEl, bgColor, tolerance, options = {}) {
+  async function detectMethodC(imgEl, bgColor, tolerance, options = {}, onProgress = null) {
     const { minArea = 500, smoothEpsilon = 2, morphKernel = 5 } = options;
+    const prog = onProgress || (() => {});
 
-    const src = imgToMat(imgEl);
+    prog(1, 3, '[1/3] Loading image…');
+    const src = await yieldThen(() => imgToMat(imgEl));
     const hsv = new cv.Mat();
     cv.cvtColor(src, hsv, cv.COLOR_BGR2HSV);
 
+    prog(2, 3, '[2/3] Masking background colour…');
     // Convert the picked RGB color to HSV
     const { h: bgH, s: bgS, v: bgV } = rgbToHsv(bgColor.r, bgColor.g, bgColor.b);
 
@@ -603,7 +641,8 @@ const ClearCutCV = (() => {
     const itemsMask = new cv.Mat();
     cv.bitwise_not(mask, itemsMask);
 
-    const contours = extractContours(itemsMask, { minArea, smoothEpsilon, morphKernel });
+    prog(3, 3, '[3/3] Finding shapes…');
+    const contours = await yieldThen(() => extractContours(itemsMask, { minArea, smoothEpsilon, morphKernel }));
 
     [src, hsv, mask, itemsMask].forEach(m => { try { m.delete(); } catch (_) {} });
     return contours;

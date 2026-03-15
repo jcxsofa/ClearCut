@@ -666,3 +666,116 @@ footer p + p { margin-top: 8px; }
   .card { padding: 16px; }
   .btn-primary, .btn-secondary, .btn-danger { font-size: .85rem; padding: 9px 14px; }
 }
+
+/* ── Progress Indicator ── */
+.detection-progress { margin: 12px 0; }
+.progress-bar-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+  width: 0%;
+}
+.progress-label {
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.progress-label.error {
+  color: var(--danger);
+}
+
+/* ── Scan Guidance Panel ── */
+.scan-guidance {
+  background: #f0f7ff;
+  border: 1px solid #c6d9f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.scan-guidance > summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--brand-dk);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.scan-guidance > summary::-webkit-details-marker { display: none; }
+.scan-guidance > summary::before {
+  content: '▶';
+  font-size: .65rem;
+  transition: transform .18s ease;
+}
+.scan-guidance[open] > summary::before { transform: rotate(90deg); }
+.scan-guidance-content {
+  padding: 4px 14px 12px;
+}
+.scan-settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .83rem;
+}
+.scan-settings-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 5px 8px 5px 0;
+  color: var(--text);
+  white-space: nowrap;
+  vertical-align: top;
+  width: 38%;
+}
+.scan-settings-table td {
+  padding: 5px 0 5px 8px;
+  color: var(--text-muted);
+  vertical-align: top;
+}
+.scan-settings-table tr + tr th,
+.scan-settings-table tr + tr td {
+  border-top: 1px solid #dde3ec;
+}
+
+/* ── Crosshatch recommended label ── */
+.recommended-label {
+  font-size: .72rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Pitch display ── */
+.pitch-display-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+  margin-top: 4px;
+}
+.pitch-label {
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+.pitch-value {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── FFT peak overlap warning ── */
+.fft-overlap-warning {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #fff8e1;
+  border: 1px solid #f0c040;
+  border-radius: 6px;
+  font-size: .82rem;
+  color: #7a5f00;
+}

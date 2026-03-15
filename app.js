@@ -90,6 +90,21 @@
   const elFftSensitivity = $('fft-sensitivity');
   const elFftSensVal     = $('fft-sensitivity-val');
 
+  // New advanced controls
+  const elCtxMorphKernel    = $('ctrl-morph-kernel');
+  const elCtxMorphKernelVal = $('ctrl-morph-kernel-val');
+  const elCtxMinAreaAdv     = $('ctrl-min-area-adv');
+  const elCtxDcGuard        = $('ctrl-dc-guard');
+  const elCtxDcGuardVal     = $('ctrl-dc-guard-val');
+  const elPitchHVal         = $('pitch-h-val');
+  const elPitchVVal         = $('pitch-v-val');
+  const elPeakOverlapWarn   = $('fft-peak-overlap-warning');
+
+  // Progress bar
+  const elDetectionProgress = $('detection-progress');
+  const elProgressFill      = $('progress-fill');
+  const elProgressLabel     = $('progress-label');
+
   // FFT debug panel
   const elFftDebugPanel  = $('fft-debug-panel');
   const elFftCanvasBefore = $('fft-canvas-before');
@@ -181,7 +196,7 @@
   });
 
   // Restore saved method
-  const savedMethod = localStorage.getItem('clearcut-method') || 'A';
+  const savedMethod = localStorage.getItem('clearcut-method') || 'B';
   selectMethod(savedMethod);
 
   // ── Image upload helpers ──────────────────────────────────────────────────
@@ -387,11 +402,24 @@
   if (elFftPeakRadius) {
     elFftPeakRadius.addEventListener('input', () => {
       elFftPeakRadVal.textContent = elFftPeakRadius.value + ' px';
+      checkPeakOverlap();
     });
   }
   if (elFftSensitivity) {
     elFftSensitivity.addEventListener('input', () => {
       elFftSensVal.textContent = elFftSensitivity.value + ' σ';
+    });
+  }
+
+  // New advanced slider listeners
+  if (elCtxMorphKernel) {
+    elCtxMorphKernel.addEventListener('input', () => {
+      elCtxMorphKernelVal.textContent = elCtxMorphKernel.value + ' px';
+    });
+  }
+  if (elCtxDcGuard) {
+    elCtxDcGuard.addEventListener('input', () => {
+      elCtxDcGuardVal.textContent = elCtxDcGuard.value + ' px';
     });
   }
 
@@ -418,18 +446,89 @@
     if (v === '12x12')     { elSheetW.value = '12';   elSheetH.value = '12'; }
   });
 
+  // ── Peak overlap warning & pitch display ─────────────────────────────────
+
+  function updatePitchDisplay() {
+    // Pitch values are in mm from the background generator; convert to px at 96 dpi
+    const mmToPx = px => (px / 25.4 * 96).toFixed(1);
+    if (elPitchHVal) {
+      const hMm = window.ClearCutBG ? ClearCutBG.CROSSHATCH_H_PITCH : null;
+      elPitchHVal.textContent = hMm != null ? `${hMm.toFixed(2)} mm  (~${mmToPx(hMm)} px at 96 dpi)` : '—';
+    }
+    if (elPitchVVal) {
+      const vMm = window.ClearCutBG ? ClearCutBG.CROSSHATCH_V_PITCH : null;
+      elPitchVVal.textContent = vMm != null ? `${vMm.toFixed(2)} mm  (~${mmToPx(vMm)} px at 96 dpi)` : '—';
+    }
+  }
+
+  function checkPeakOverlap() {
+    if (!elPeakOverlapWarn || !elFftPeakRadius) return;
+    // At 600 DPI, crosshatch pitches: hPitch ~15 px, vPitch ~24 px (screen-px equivalents given dpi)
+    // Warn when radius > min(hPitch, vPitch) / 2
+    const radius = Number(elFftPeakRadius.value);
+    // Use the actual mm values converted to 600-dpi pixels for the warning check
+    const dpi = 600;
+    const mmPerIn = 25.4;
+    const hPx = window.ClearCutBG ? (ClearCutBG.CROSSHATCH_H_PITCH / mmPerIn * dpi) : 15;
+    const vPx = window.ClearCutBG ? (ClearCutBG.CROSSHATCH_V_PITCH / mmPerIn * dpi) : 24;
+    const halfMin = Math.min(hPx, vPx) / 2;
+    if (radius > halfMin) {
+      elPeakOverlapWarn.classList.remove('hidden');
+    } else {
+      elPeakOverlapWarn.classList.add('hidden');
+    }
+  }
+
+  // ── Progress bar helpers ──────────────────────────────────────────────────
+
+  function showProgress(step, total, message) {
+    if (!elDetectionProgress) return;
+    elDetectionProgress.classList.remove('hidden');
+    if (elProgressFill) {
+      const pct = total > 0 ? Math.round((step / total) * 100) : 0;
+      elProgressFill.style.width = pct + '%';
+    }
+    if (elProgressLabel) {
+      elProgressLabel.textContent = message || '';
+      elProgressLabel.classList.remove('error');
+    }
+  }
+
+  function hideProgress(delay = 1500) {
+    if (!elDetectionProgress) return;
+    setTimeout(() => {
+      elDetectionProgress.classList.add('hidden');
+      if (elProgressFill) elProgressFill.style.width = '0%';
+    }, delay);
+  }
+
+  function setProgressError(message) {
+    if (!elDetectionProgress) return;
+    elDetectionProgress.classList.remove('hidden');
+    if (elProgressFill) elProgressFill.style.width = '100%';
+    if (elProgressLabel) {
+      elProgressLabel.textContent = message;
+      elProgressLabel.classList.add('error');
+    }
+  }
+
   // ── Detection ─────────────────────────────────────────────────────────────
 
   function getDetectionOptions() {
+    // morphKernel: prefer new dedicated slider if set, otherwise fall back to old ctrl-morph
+    const morphKernelVal = elCtxMorphKernel ? Number(elCtxMorphKernel.value) : Number(elCtxMorph.value);
+    // minArea: prefer dedicated advanced number input if present, otherwise the main slider
+    const minAreaVal = elCtxMinAreaAdv ? Number(elCtxMinAreaAdv.value) : Number(elCtxMinArea.value);
     return {
       threshold:     Number(elCtxThreshold.value),
-      minArea:       Number(elCtxMinArea.value),
+      minArea:       minAreaVal,
       smoothEpsilon: Number(elCtxSmooth.value),
-      morphKernel:   Number(elCtxMorph.value),
+      morphKernel:   morphKernelVal,
       blurRadius:    Number(elCtxBlur.value),
       useFFT:        elUseFFT ? elUseFFT.checked : true,
       fftPeakRadius: elFftPeakRadius ? Number(elFftPeakRadius.value) : 12,
       fftSensitivity: elFftSensitivity ? Number(elFftSensitivity.value) : 3,
+      dcGuard:       elCtxDcGuard ? Number(elCtxDcGuard.value) : 10,
     };
   }
 
@@ -445,12 +544,19 @@
     const origText  = activeBtn?.textContent;
     if (activeBtn) { activeBtn.textContent = '⏳ Processing…'; activeBtn.disabled = true; }
 
+    // Show progress bar at step 0
+    showProgress(0, 1, 'Preparing…');
+
+    const progressCallback = (step, total, message) => {
+      showProgress(step, total, message);
+    };
+
     try {
       let contours;
       const opts = getDetectionOptions();
 
       if (state.method === 'A') {
-        contours = ClearCutCV.detectMethodA(state.images.bg, state.images.items, opts);
+        contours = await ClearCutCV.detectMethodA(state.images.bg, state.images.items, opts, progressCallback);
         state.activeImage = state.images.items;
         state.itemsMat    = state.images.items;
         if (contours._alignmentWarning) {
@@ -460,11 +566,11 @@
       } else if (state.method === 'B') {
         const pattern = elScanPattern.value;
         const useFFT  = elUseFFT ? elUseFFT.checked : true;
-        contours = ClearCutCV.detectMethodB(state.images.scan, pattern, {
+        contours = await ClearCutCV.detectMethodB(state.images.scan, pattern, {
           ...opts,
           fftDebugCanvasBefore: useFFT ? elFftCanvasBefore : null,
           fftDebugCanvasAfter:  useFFT ? elFftCanvasAfter  : null,
-        });
+        }, progressCallback);
         // Show/hide the FFT debug panel based on whether FFT was used
         if (elFftDebugPanel) {
           if (useFFT) {
@@ -487,7 +593,7 @@
         const hex = elColorPick.value;
         const bgColor = hexToRgb(hex);
         const tolerance = Number(elColorTol.value);
-        contours = ClearCutCV.detectMethodC(state.images.solid, bgColor, tolerance, opts);
+        contours = await ClearCutCV.detectMethodC(state.images.solid, bgColor, tolerance, opts, progressCallback);
         state.activeImage = state.images.solid;
         state.itemsMat    = state.images.solid;
       }
@@ -516,10 +622,16 @@
       // Show GrabCut bar now that we have detection results
       if (elGrabCutBar) elGrabCutBar.classList.remove('hidden');
 
+      // Update progress to completion
+      const n = state.contours.filter(c => c.enabled).length;
+      showProgress(1, 1, `Done — ${n} shape${n !== 1 ? 's' : ''} found`);
+      hideProgress(1500);
+
       elSectionPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     } catch (err) {
       console.error('Detection error:', err);
+      setProgressError('⚠️ Detection failed: ' + err.message);
       alert('Detection failed: ' + err.message);
     } finally {
       state.isDetecting = false;
@@ -783,7 +895,7 @@
   // ── Background download ───────────────────────────────────────────────────
 
   elBtnDlBG.addEventListener('click', () => {
-    const pattern = document.querySelector('input[name="pattern"]:checked')?.value || 'stripes';
+    const pattern = document.querySelector('input[name="pattern"]:checked')?.value || 'crosshatch';
     ClearCutBG.downloadBackground(pattern);
     // Sync the detection pattern selector
     if (elScanPattern) elScanPattern.value = pattern;
@@ -802,12 +914,16 @@
   // ── Background pattern thumbnails ─────────────────────────────────────────
 
   function initPatternPreviews() {
+    const previewCrosshatch = $('preview-crosshatch');
     const previewStripes  = $('preview-stripes');
     const previewChecker  = $('preview-checker');
     const previewDots     = $('preview-dots');
+    if (previewCrosshatch) ClearCutBG.renderPatternPreview('crosshatch',    previewCrosshatch);
     if (previewStripes)  ClearCutBG.renderPatternPreview('stripes',       previewStripes);
     if (previewChecker)  ClearCutBG.renderPatternPreview('checkerboard',  previewChecker);
     if (previewDots)     ClearCutBG.renderPatternPreview('dotgrid',       previewDots);
+    updatePitchDisplay();
+    checkPeakOverlap();
   }
   initPatternPreviews();
 
