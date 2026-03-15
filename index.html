@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Generate Cricut SVG cut files from scanned laminated sheets" />
+  <meta name="theme-color" content="#4A90D9" />
+  <title>ClearCut ✂️</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- OpenCV loading overlay -->
+  <div id="cv-loading-overlay" class="overlay">
+    <div class="overlay-content">
+      <div class="spinner"></div>
+      <p>Loading OpenCV.js…</p>
+      <p class="overlay-sub">This may take a moment on first load (~8MB).<br>It will be cached for offline use.</p>
+    </div>
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <h1>✂️ ClearCut</h1>
+      <p class="tagline">Generate Cricut cut files from scanned laminated sheets</p>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── STEP 1: METHOD SELECTION ── -->
+    <section class="card" id="section-method">
+      <h2><span class="step-badge">1</span> How are you scanning?</h2>
+      <div class="method-options">
+
+        <label class="method-card" id="method-card-a">
+          <input type="radio" name="method" value="A" id="method-a" />
+          <div class="method-icon">📷</div>
+          <div class="method-text">
+            <strong>Two Photos</strong>
+            <span>Phone camera — any surface</span>
+          </div>
+          <div class="method-badge recommended">Best for phones</div>
+        </label>
+
+        <label class="method-card" id="method-card-b">
+          <input type="radio" name="method" value="B" id="method-b" />
+          <div class="method-icon">🖨️</div>
+          <div class="method-text">
+            <strong>Printable Background</strong>
+            <span>Flatbed scanner or phone</span>
+          </div>
+          <div class="method-badge">Best for scanners</div>
+        </label>
+
+        <label class="method-card" id="method-card-c">
+          <input type="radio" name="method" value="C" id="method-c" />
+          <div class="method-icon">🟩</div>
+          <div class="method-text">
+            <strong>Solid Color Background</strong>
+            <span>Any solid-colored surface</span>
+          </div>
+          <div class="method-badge">Simplest</div>
+        </label>
+
+      </div>
+    </section>
+
+    <!-- ── STEP 2A: METHOD A UPLOAD ── -->
+    <section class="card hidden" id="section-upload-a">
+      <h2><span class="step-badge">2</span> Upload Your Photos</h2>
+      <p class="hint">Take two photos from the same angle — first without the items, then with them.</p>
+
+      <div class="upload-grid-two">
+        <div class="upload-zone" id="drop-bg" data-target="bg">
+          <input type="file" id="input-bg" accept="image/*" capture="environment" />
+          <div class="upload-icon">📷</div>
+          <div class="upload-label">
+            <strong>Background photo</strong>
+            <span>Surface only — no items yet</span>
+          </div>
+          <button class="btn-upload" onclick="document.getElementById('input-bg').click()">Choose / Capture</button>
+          <div class="upload-preview-wrap hidden">
+            <img class="upload-preview" id="preview-bg" alt="Background preview" />
+            <button class="btn-clear-img" data-clear="bg" title="Remove">✕</button>
+          </div>
+        </div>
+
+        <div class="upload-zone" id="drop-items" data-target="items">
+          <input type="file" id="input-items" accept="image/*" capture="environment" />
+          <div class="upload-icon">📷</div>
+          <div class="upload-label">
+            <strong>Items photo</strong>
+            <span>Same surface, items placed on top</span>
+          </div>
+          <button class="btn-upload" onclick="document.getElementById('input-items').click()">Choose / Capture</button>
+          <div class="upload-preview-wrap hidden">
+            <img class="upload-preview" id="preview-items" alt="Items preview" />
+            <button class="btn-clear-img" data-clear="items" title="Remove">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-primary full-width mt" id="btn-detect-a" disabled>
+        🔍 Detect Items
+      </button>
+    </section>
+
+    <!-- ── STEP 2B: METHOD B UPLOAD + BACKGROUND PRINT ── -->
+    <section class="card hidden" id="section-upload-b">
+      <h2><span class="step-badge">2</span> Printable Reference Background</h2>
+
+      <!-- Print panel -->
+      <details class="print-panel" id="print-panel">
+        <summary>🖨️ Print a Reference Background</summary>
+        <div class="print-panel-content">
+          <div class="pattern-options">
+            <label class="pattern-card">
+              <input type="radio" name="pattern" value="stripes" checked />
+              <div class="pattern-preview" id="preview-stripes"></div>
+              <strong>Bold Stripes</strong>
+              <span>Recommended</span>
+            </label>
+            <label class="pattern-card">
+              <input type="radio" name="pattern" value="checkerboard" />
+              <div class="pattern-preview" id="preview-checker"></div>
+              <strong>Checkerboard</strong>
+            </label>
+            <label class="pattern-card">
+              <input type="radio" name="pattern" value="dotgrid" />
+              <div class="pattern-preview" id="preview-dots"></div>
+              <strong>Dot Grid</strong>
+            </label>
+          </div>
+          <p class="print-tip">💡 Print at <strong>100% scale</strong> — do not scale to fit page.</p>
+          <button class="btn-secondary" id="btn-download-bg">⬇ Download PDF to Print</button>
+        </div>
+      </details>
+
+      <!-- Upload zone -->
+      <div class="upload-zone mt" id="drop-scan" data-target="scan">
+        <input type="file" id="input-scan" accept="image/*" capture="environment" />
+        <div class="upload-icon">📄</div>
+        <div class="upload-label">
+          <strong>Upload your scan</strong>
+          <span>Items placed on the reference background</span>
+        </div>
+        <button class="btn-upload" onclick="document.getElementById('input-scan').click()">Choose / Capture</button>
+        <div class="upload-preview-wrap hidden">
+          <img class="upload-preview" id="preview-scan" alt="Scan preview" />
+          <button class="btn-clear-img" data-clear="scan" title="Remove">✕</button>
+        </div>
+      </div>
+
+      <div class="controls-row mt">
+        <label>Selected pattern:
+          <select id="scan-pattern-select">
+            <option value="stripes">Bold Stripes</option>
+            <option value="checkerboard">Checkerboard</option>
+            <option value="dotgrid">Dot Grid</option>
+          </select>
+        </label>
+      </div>
+
+      <button class="btn-primary full-width mt" id="btn-detect-b" disabled>
+        🔍 Detect Items
+      </button>
+    </section>
+
+    <!-- ── STEP 2C: METHOD C UPLOAD + COLOR PICKER ── -->
+    <section class="card hidden" id="section-upload-c">
+      <h2><span class="step-badge">2</span> Upload Your Photo</h2>
+      <p class="hint">Place your items on a solid-colored surface (e.g. bright green or red paper).</p>
+
+      <div class="upload-zone" id="drop-solid" data-target="solid">
+        <input type="file" id="input-solid" accept="image/*" capture="environment" />
+        <div class="upload-icon">🖼️</div>
+        <div class="upload-label">
+          <strong>Upload image</strong>
+          <span>Items on solid color background</span>
+        </div>
+        <button class="btn-upload" onclick="document.getElementById('input-solid').click()">Choose / Capture</button>
+        <div class="upload-preview-wrap hidden">
+          <img class="upload-preview" id="preview-solid" alt="Solid background preview" />
+          <button class="btn-clear-img" data-clear="solid" title="Remove">✕</button>
+        </div>
+      </div>
+
+      <div class="color-picker-row mt">
+        <div class="color-info">
+          <label for="bg-color-pick">Background color:</label>
+          <input type="color" id="bg-color-pick" value="#00b050" />
+          <span class="color-hint">— or click on the background in the preview to sample it</span>
+        </div>
+        <label class="controls-label">
+          Tolerance: <input type="range" id="color-tolerance" min="5" max="80" value="30" />
+          <span id="color-tolerance-val">30</span>
+        </label>
+      </div>
+
+      <button class="btn-primary full-width mt" id="btn-detect-c" disabled>
+        🔍 Detect Items
+      </button>
+    </section>
+
+    <!-- ── STEP 3: DETECTION CONTROLS & PREVIEW ── -->
+    <section class="card hidden" id="section-preview">
+      <h2><span class="step-badge">3</span> Preview &amp; Adjust</h2>
+
+      <div class="controls-grid">
+        <label class="control-item">
+          <span>Detection sensitivity</span>
+          <input type="range" id="ctrl-threshold" min="5" max="100" value="30" />
+          <span id="ctrl-threshold-val">30</span>
+        </label>
+        <label class="control-item">
+          <span>Cut line padding</span>
+          <input type="range" id="ctrl-padding" min="0" max="20" value="2" step="0.5" />
+          <span id="ctrl-padding-val">2 mm</span>
+        </label>
+        <label class="control-item">
+          <span>Minimum shape area</span>
+          <input type="range" id="ctrl-min-area" min="100" max="5000" value="500" step="100" />
+          <span id="ctrl-min-area-val">500 px²</span>
+        </label>
+      </div>
+
+      <div class="canvas-container" id="canvas-container">
+        <canvas id="preview-canvas"></canvas>
+        <div id="click-sample-hint" class="click-hint hidden">Click on the background color to sample it</div>
+      </div>
+
+      <div class="shape-info">
+        <span id="shape-count-label">Shapes detected: <strong id="shape-count">0</strong></span>
+        <span class="hint-small">Click a shape outline to toggle it on/off</span>
+      </div>
+
+      <div class="redetect-row">
+        <button class="btn-secondary" id="btn-redetect">↺ Re-detect</button>
+        <button class="btn-secondary" id="btn-add-rect">＋ Add Rect</button>
+        <button class="btn-danger" id="btn-clear-all">✕ Clear All Shapes</button>
+      </div>
+    </section>
+
+    <!-- ── STEP 4: EXPORT ── -->
+    <section class="card hidden" id="section-export">
+      <h2><span class="step-badge">4</span> Export SVG for Cricut</h2>
+
+      <div class="export-controls">
+        <label class="control-item">
+          <span>Sheet width</span>
+          <div class="input-with-unit">
+            <input type="number" id="sheet-width" value="8.5" min="1" max="36" step="0.5" />
+            <span>inches</span>
+          </div>
+        </label>
+        <label class="control-item">
+          <span>Sheet height</span>
+          <div class="input-with-unit">
+            <input type="number" id="sheet-height" value="11" min="1" max="36" step="0.5" />
+            <span>inches</span>
+          </div>
+        </label>
+        <label class="control-item">
+          <span>Preset</span>
+          <select id="sheet-preset">
+            <option value="8.5x11">US Letter (8.5" × 11")</option>
+            <option value="8.27x11.69">A4 (8.27" × 11.69")</option>
+            <option value="12x12">Cricut Mat (12" × 12")</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </label>
+      </div>
+
+      <button class="btn-primary full-width mt" id="btn-download-svg">
+        ⬇ Download SVG for Cricut
+      </button>
+      <p id="export-status" class="export-status hidden"></p>
+    </section>
+
+    <!-- ── CRICUT INSTRUCTIONS ── -->
+    <section class="card" id="section-instructions">
+      <details>
+        <summary>📋 How to use in Cricut Design Space</summary>
+        <ol class="instructions-list">
+          <li>Open <strong>Cricut Design Space</strong> on your computer or tablet.</li>
+          <li>Click <strong>Upload</strong> in the left panel.</li>
+          <li>Click <strong>Upload Image</strong>, then select the downloaded <code>.svg</code> file.</li>
+          <li>Choose <strong>Cut Image</strong> and click <strong>Save</strong>.</li>
+          <li>Insert the image into your project and size it to match your sheet if needed.</li>
+          <li>Place your laminated sheet on the Cricut mat aligned to the <strong>top-left corner</strong>.</li>
+          <li>Load the mat into your Cricut and click <strong>Make It</strong> → <strong>Cut!</strong></li>
+        </ol>
+      </details>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>ClearCut — all processing happens on your device. No data is ever uploaded.</p>
+    <p id="install-prompt-wrap" class="hidden">
+      <button class="btn-secondary" id="btn-install">📲 Install App</button>
+    </p>
+  </footer>
+
+  <!-- Hidden canvases used for CV processing -->
+  <canvas id="cv-canvas-a" style="display:none"></canvas>
+  <canvas id="cv-canvas-b" style="display:none"></canvas>
+
+  <!-- Scripts -->
+  <script>
+    // OpenCV Module config — must be set BEFORE loading opencv.js
+    var Module = {
+      onRuntimeInitialized: function() {
+        window.cvReady = true;
+        document.dispatchEvent(new Event('opencv-ready'));
+        document.getElementById('cv-loading-overlay').classList.add('hidden');
+      }
+    };
+  </script>
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onerror="handleCvError()"></script>
+  <script>
+    function handleCvError() {
+      const el = document.getElementById('cv-loading-overlay');
+      el.querySelector('p').textContent = '⚠️ Failed to load OpenCV.js';
+      el.querySelector('.overlay-sub').textContent = 'Check your internet connection and reload the page.';
+    }
+  </script>
+  <script src="backgrounds.js"></script>
+  <script src="cv.js"></script>
+  <script src="svg.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
