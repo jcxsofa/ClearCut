@@ -18,10 +18,13 @@
   const state = {
     method:     null,      // 'A' | 'B' | 'C'
     images:     {},        // { bg, items, scan, solid } — HTMLImageElements
-    contours:   [],        // current detected contour objects
+    contours:   [],        // current shapes shown in preview (may be GrabCut-refined + padded)
+    detectedShapes: [],    // raw shapes from detection (pre-GrabCut, pre-padding)
+    itemsMat:   null,      // source image kept for GrabCut (HTMLImageElement reference)
     previewRatio: 1,       // canvas px / image px
     activeImage: null,     // the primary image shown in the canvas
     isDetecting: false,
+    isGrabCutting: false,
     addRectMode: false,
     rectStart:   null,
   };
@@ -80,6 +83,22 @@
   const elInstallWrap  = $('install-prompt-wrap');
   const elBtnInstall   = $('btn-install');
 
+  // FFT controls
+  const elUseFFT         = $('use-fft');
+  const elFftPeakRadius  = $('fft-peak-radius');
+  const elFftPeakRadVal  = $('fft-peak-radius-val');
+  const elFftSensitivity = $('fft-sensitivity');
+  const elFftSensVal     = $('fft-sensitivity-val');
+
+  // GrabCut controls
+  const elGrabCutBar    = $('grabcut-bar');
+  const elGrabCutBtn    = $('grabcut-btn');
+  const elGrabCutIters  = $('grabcut-iters');
+  const elGrabCutItersVal = $('grabcut-iters-val');
+  const elGrabCutMargin = $('grabcut-margin');
+  const elGrabCutMarginVal = $('grabcut-margin-val');
+  const elGrabCutStatus = $('grabcut-status');
+
   // ── PWA install ──────────────────────────────────────────────────────────
   let deferredInstallPrompt = null;
   window.addEventListener('beforeinstallprompt', e => {
@@ -130,9 +149,12 @@
 
     // Clear any previous detection results when switching
     state.contours   = [];
+    state.detectedShapes = [];
+    state.itemsMat   = null;
     state.activeImage = null;
     elSectionPreview.classList.add('hidden');
     elSectionExport.classList.add('hidden');
+    if (elGrabCutBar) elGrabCutBar.classList.add('hidden');
 
     // Method C — show sampling hint on canvas
     if (method === 'C') {
@@ -280,7 +302,19 @@
   });
   elCtxPadding.addEventListener('input', () => {
     elCtxPadVal.textContent = elCtxPadding.value + ' mm';
-    if (state.activeImage && state.contours.length) renderPreview();
+    if (state.activeImage && state.detectedShapes.length) {
+      // Re-apply dilation padding from the raw detected shapes (not re-running full detection)
+      const paddingPx = getPaddingPx();
+      state.contours = paddingPx > 0
+        ? ClearCutCV.applyDilationPadding(
+            state.detectedShapes.map(s => ({ ...s, points: [...s.points] })),
+            state.activeImage,
+            paddingPx
+          )
+        : state.detectedShapes.map(s => ({ ...s }));
+      updateShapeCount();
+      renderPreview();
+    }
   });
   elCtxMinArea.addEventListener('input', () => {
     elCtxMinAreaVal.textContent = elCtxMinArea.value + ' px²';
@@ -300,6 +334,30 @@
   elCtxOutlineColor.addEventListener('input', () => {
     if (state.activeImage && state.contours.length) renderPreview();
   });
+
+  // FFT slider listeners
+  if (elFftPeakRadius) {
+    elFftPeakRadius.addEventListener('input', () => {
+      elFftPeakRadVal.textContent = elFftPeakRadius.value + ' px';
+    });
+  }
+  if (elFftSensitivity) {
+    elFftSensitivity.addEventListener('input', () => {
+      elFftSensVal.textContent = elFftSensitivity.value + ' σ';
+    });
+  }
+
+  // GrabCut slider listeners
+  if (elGrabCutIters) {
+    elGrabCutIters.addEventListener('input', () => {
+      elGrabCutItersVal.textContent = elGrabCutIters.value;
+    });
+  }
+  if (elGrabCutMargin) {
+    elGrabCutMargin.addEventListener('input', () => {
+      elGrabCutMarginVal.textContent = elGrabCutMargin.value + ' px';
+    });
+  }
   elColorTol.addEventListener('input', () => {
     elColorTolVal.textContent = elColorTol.value;
   });
@@ -314,13 +372,16 @@
 
   // ── Detection ─────────────────────────────────────────────────────────────
 
-  function getDetectOptions() {
+  function getDetectionOptions() {
     return {
-      threshold:    Number(elCtxThreshold.value),
-      minArea:      Number(elCtxMinArea.value),
+      threshold:     Number(elCtxThreshold.value),
+      minArea:       Number(elCtxMinArea.value),
       smoothEpsilon: Number(elCtxSmooth.value),
-      morphKernel:  Number(elCtxMorph.value),
-      blurRadius:   Number(elCtxBlur.value),
+      morphKernel:   Number(elCtxMorph.value),
+      blurRadius:    Number(elCtxBlur.value),
+      useFFT:        elUseFFT ? elUseFFT.checked : true,
+      fftPeakRadius: elFftPeakRadius ? Number(elFftPeakRadius.value) : 12,
+      fftSensitivity: elFftSensitivity ? Number(elFftSensitivity.value) : 3,
     };
   }
 
@@ -338,11 +399,12 @@
 
     try {
       let contours;
-      const opts = getDetectOptions();
+      const opts = getDetectionOptions();
 
       if (state.method === 'A') {
         contours = ClearCutCV.detectMethodA(state.images.bg, state.images.items, opts);
         state.activeImage = state.images.items;
+        state.itemsMat    = state.images.items;
         if (contours._alignmentWarning) {
           console.warn('ClearCut: image alignment failed — using direct subtraction');
           showStatus('⚠️ Could not align the two photos. Results may be less accurate.');
@@ -351,12 +413,14 @@
         const pattern = elScanPattern.value;
         contours = ClearCutCV.detectMethodB(state.images.scan, pattern, opts);
         state.activeImage = state.images.scan;
+        state.itemsMat    = state.images.scan;
       } else {
         const hex = elColorPick.value;
         const bgColor = hexToRgb(hex);
         const tolerance = Number(elColorTol.value);
         contours = ClearCutCV.detectMethodC(state.images.solid, bgColor, tolerance, opts);
         state.activeImage = state.images.solid;
+        state.itemsMat    = state.images.solid;
       }
 
       // Apply max shapes cap (contours are already sorted by area desc)
@@ -365,12 +429,24 @@
         contours = contours.slice(0, maxShapes);
       }
 
-      state.contours = contours;
+      // Store raw detected shapes (pre-GrabCut, pre-padding)
+      state.detectedShapes = contours;
+
+      // Apply dilation padding
+      const paddingPx = getPaddingPx();
+      state.contours = paddingPx > 0
+        ? ClearCutCV.applyDilationPadding(contours.map(s => ({ ...s, points: [...s.points] })), state.activeImage, paddingPx)
+        : contours;
+
       updateShapeCount();
       renderPreview();
 
       elSectionPreview.classList.remove('hidden');
       elSectionExport.classList.remove('hidden');
+
+      // Show GrabCut bar now that we have detection results
+      if (elGrabCutBar) elGrabCutBar.classList.remove('hidden');
+
       elSectionPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     } catch (err) {
@@ -398,6 +474,63 @@
   elBtnDetectC.addEventListener('click', runDetection);
   elBtnRedetect.addEventListener('click', runDetection);
 
+  // ── GrabCut refinement ────────────────────────────────────────────────────
+
+  if (elGrabCutBtn) {
+    elGrabCutBtn.addEventListener('click', async () => {
+      if (state.isGrabCutting || !state.itemsMat || !state.contours.length) return;
+      if (!window.cvReady) {
+        alert('OpenCV is still loading. Please wait a moment and try again.');
+        return;
+      }
+
+      state.isGrabCutting = true;
+      elGrabCutBtn.disabled = true;
+      elGrabCutBtn.textContent = '⏳ Running GrabCut…';
+
+      const iters  = elGrabCutIters  ? Number(elGrabCutIters.value)  : 5;
+      const margin = elGrabCutMargin ? Number(elGrabCutMargin.value) : 10;
+      const total  = state.contours.filter(s => s.enabled).length;
+
+      try {
+        const refined = await new Promise((resolve) => {
+          // Yield to the browser before starting the heavy processing
+          setTimeout(() => {
+            const result = ClearCutCV.grabCutRefineAll(
+              state.itemsMat,
+              state.contours,
+              { iters, margin },
+              (current, shapeTotal) => {
+                if (elGrabCutStatus) {
+                  elGrabCutStatus.textContent = `GrabCut: shape ${current}/${shapeTotal}…`;
+                }
+              }
+            );
+            resolve(result);
+          }, 0);
+        });
+
+        // Preserve enabled state from old shapes
+        refined.forEach((s, i) => {
+          s.enabled = state.contours[i].enabled;
+        });
+
+        state.contours = refined;
+        updateShapeCount();
+        renderPreview();
+
+        if (elGrabCutStatus) elGrabCutStatus.textContent = `✅ Refined ${total} shape${total !== 1 ? 's' : ''}.`;
+      } catch (err) {
+        console.error('GrabCut error:', err);
+        if (elGrabCutStatus) elGrabCutStatus.textContent = '⚠️ GrabCut failed: ' + err.message;
+      } finally {
+        state.isGrabCutting = false;
+        elGrabCutBtn.disabled = false;
+        elGrabCutBtn.textContent = '🔬 Refine with GrabCut';
+      }
+    });
+  }
+
   // ── Preview rendering ────────────────────────────────────────────────────
 
   function getPaddingPx() {
@@ -412,10 +545,9 @@
 
   function renderPreview() {
     if (!state.activeImage) return;
-    const paddingPx    = getPaddingPx();
     const outlineColor = elCtxOutlineColor?.value || '#00ff66';
     state.previewRatio = ClearCutSVG.drawPreview(
-      elCanvas, state.activeImage, state.contours, paddingPx, state.hoverIdx ?? null, outlineColor
+      elCanvas, state.activeImage, state.contours, 0, state.hoverIdx ?? null, outlineColor
     );
   }
 
@@ -540,9 +672,12 @@
   elBtnClearAll.addEventListener('click', () => {
     if (confirm('Remove all detected shapes?')) {
       state.contours = [];
+      state.detectedShapes = [];
+      state.itemsMat = null;
       updateShapeCount();
       renderPreview();
       elSectionExport.classList.add('hidden');
+      if (elGrabCutBar) elGrabCutBar.classList.add('hidden');
     }
   });
 
@@ -563,12 +698,11 @@
     const imgH    = state.activeImage.naturalHeight || state.activeImage.height;
     const sheetWIn    = Number(elSheetW.value) || 8.5;
     const sheetHIn    = Number(elSheetH.value) || 11;
-    const paddingMm   = Number(elCtxPadding.value) || 0;
     const strokeWidth = elSvgStrokeWidth ? elSvgStrokeWidth.value : '0.01';
 
     try {
       const svgStr = ClearCutSVG.generateSVG(
-        state.contours, imgW, imgH, sheetWIn, sheetHIn, paddingMm, strokeWidth
+        state.contours, imgW, imgH, sheetWIn, sheetHIn, 0, strokeWidth
       );
       ClearCutSVG.downloadSVG(svgStr);
       showStatus(`✅ Downloaded SVG with ${enabled.length} shape${enabled.length !== 1 ? 's' : ''}.`);

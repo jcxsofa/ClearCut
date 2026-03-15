@@ -250,10 +250,33 @@
           </label>
 
           <label class="control-item" id="ctrl-blur-wrap">
-            <span>Pattern blur radius <span class="method-tag">B</span></span>
+            <span>Pattern blur radius <span class="badge badge-b">B</span></span>
             <input type="range" id="ctrl-blur" min="10" max="80" value="25" step="5" />
             <span id="ctrl-blur-val">25 px</span>
-            <span class="ctrl-hint">Low-pass blur to separate items from the printed background</span>
+            <span class="ctrl-hint">Low-pass blur to separate items from the printed background (Gaussian fallback only)</span>
+          </label>
+
+          <!-- FFT controls (shown for Method B) -->
+          <label class="control-item" id="ctrl-fft-toggle-wrap">
+            <span>Use FFT pattern removal <span class="badge badge-b">B</span></span>
+            <div class="toggle-row">
+              <input type="checkbox" id="use-fft" checked />
+              <span class="ctrl-hint">Mathematically remove repeating pattern; uncheck to use Gaussian blur fallback</span>
+            </div>
+          </label>
+
+          <label class="control-item" id="ctrl-fft-radius-wrap">
+            <span>FFT suppression radius <span class="badge badge-b">B</span></span>
+            <input type="range" id="fft-peak-radius" min="4" max="40" value="12" step="1" />
+            <span id="fft-peak-radius-val">12 px</span>
+            <span class="ctrl-hint">Width of notch around each zeroed frequency peak</span>
+          </label>
+
+          <label class="control-item" id="ctrl-fft-sens-wrap">
+            <span>FFT peak sensitivity <span class="badge badge-b">B</span></span>
+            <input type="range" id="fft-sensitivity" min="1" max="8" value="3" step="0.5" />
+            <span id="fft-sensitivity-val">3 σ</span>
+            <span class="ctrl-hint">Stddevs above mean to classify a frequency spike as a pattern peak</span>
           </label>
 
           <label class="control-item">
@@ -281,6 +304,30 @@
         <button class="btn-secondary" id="btn-redetect">↺ Re-detect</button>
         <button class="btn-secondary" id="btn-add-rect">＋ Add Rect</button>
         <button class="btn-danger" id="btn-clear-all">✕ Clear All Shapes</button>
+      </div>
+
+      <!-- GrabCut refinement bar — hidden until initial detection succeeds -->
+      <div class="grabcut-bar hidden" id="grabcut-bar">
+        <div class="grabcut-info">
+          <strong>🔬 GrabCut Refinement</strong>
+          <span class="ctrl-hint">Runs graph-cut segmentation on each shape to sharpen edges using the original image colours.</span>
+        </div>
+        <div class="grabcut-controls">
+          <label class="control-item">
+            <span>Iterations</span>
+            <input type="range" id="grabcut-iters" min="1" max="10" value="5" step="1" />
+            <span id="grabcut-iters-val">5</span>
+            <span class="ctrl-hint">More = better quality, slower</span>
+          </label>
+          <label class="control-item">
+            <span>Context margin</span>
+            <input type="range" id="grabcut-margin" min="0" max="40" value="10" step="1" />
+            <span id="grabcut-margin-val">10 px</span>
+            <span class="ctrl-hint">Extra pixels around bounding box for GrabCut context</span>
+          </label>
+          <button class="btn-secondary" id="grabcut-btn">🔬 Refine with GrabCut</button>
+          <span class="grabcut-status" id="grabcut-status"></span>
+        </div>
       </div>
     </section>
 

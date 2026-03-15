@@ -522,6 +522,72 @@ footer p + p { margin-top: 8px; }
   margin-left: 3px;
 }
 
+/* ── Method/feature badge (like .method-tag but named .badge) ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px; height: 16px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: .65rem;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 3px;
+  color: #fff;
+}
+.badge-b { background: var(--brand); }
+.badge-a { background: var(--accent); }
+.badge-c { background: #8b5cf6; }
+
+/* ── Toggle row (checkbox + hint inline) ── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.toggle-row input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+/* ── GrabCut bar ── */
+.grabcut-bar {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  background: #f8f9fb;
+}
+
+.grabcut-info {
+  margin-bottom: 12px;
+}
+.grabcut-info strong {
+  display: block;
+  font-size: .93rem;
+  margin-bottom: 4px;
+}
+
+.grabcut-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+@media (max-width: 480px) {
+  .grabcut-controls { grid-template-columns: 1fr; }
+}
+
+.grabcut-status {
+  font-size: .82rem;
+  color: var(--text-muted);
+  grid-column: 1 / -1;
+  min-height: 1.2em;
+}
+
 .outline-color-row {
   display: flex;
   align-items: center;
