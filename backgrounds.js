@@ -215,57 +215,94 @@ const ClearCutBG = (() => {
 
   // ── Tiny PDF wrapper ──────────────────────────────────────────────────────
   // Generates a minimal single-page PDF that embeds the SVG as an image
-  // by converting the SVG to a data URI and embedding it via a /Form XObject.
-  // This approach is widely supported for "print to PDF" workflows.
+  // ── PDF printing ──────────────────────────────────────────────────────────
+  // Building a standards-compliant PDF from scratch (without a library) requires
+  // non-trivial binary stream encoding.  The simplest cross-browser approach that
+  // actually produces a print-ready PDF is to wrap the SVG inside a minimal HTML
+  // print page, open it in a new tab, and call window.print().  The browser's
+  // built-in print dialog lets the user choose "Save as PDF" at 100% scale,
+  // which is exactly the workflow we need.
 
   /**
-   * Package an SVG string as a downloadable single-page PDF.
-   * We encode the SVG inside a PDF stream as an XObject.
+   * Open the SVG in a dedicated print tab.
+   * The page auto-calls window.print() on load, so the OS print dialog appears
+   * immediately.  CSS @page removes margins and forces the SVG to fill the sheet.
+   *
+   * @param {string} svgString  – full SVG source
+   * @param {string} title      – document title shown in the print dialog
    */
-  function svgToPdfBlob(svgString) {
-    // Convert SVG → data URI (no rasterization — browsers can print SVGs in PDFs)
-    // Instead we build a minimal PDF with just a single page that embeds an SVG as inline XObject.
-    // The simplest cross-browser approach: wrap SVG in an HTML page and trigger window.print().
-    // We'll use an intermediate approach: return an SVG blob directly.
-    // (A true raw PDF without a library requires complex PDF stream encoding.)
-    // For maximum compatibility, we return the SVG as-is with a .pdf MIME type hint;
-    // browsers and OS print dialogs will handle the rest if the user opens and prints.
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-    return blob;
+  function openPrintTab(svgString, title) {
+    // Encode SVG as a data URI so we don't need a separate URL
+    const encoded = encodeURIComponent(svgString);
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>${title}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { margin: 0; size: letter portrait; }
+    html, body { width: 100%; height: 100%; background: white; }
+    img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .hint {
+      font-family: sans-serif; font-size: 13px; color: #555;
+      text-align: center; padding: 12px;
+      border-bottom: 1px solid #ddd; margin-bottom: 8px;
+    }
+    @media print { .hint { display: none; } }
+  </style>
+</head>
+<body>
+  <p class="hint">📄 In the print dialog choose <strong>Save as PDF</strong> and set scale to <strong>100%</strong> (no "fit to page").</p>
+  <img src="data:image/svg+xml,${encoded}" alt="ClearCut reference background" />
+  <script>window.addEventListener('load', () => window.print());<\/script>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const tab  = window.open(url, '_blank');
+    // Revoke after the tab has had time to load
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    if (!tab) {
+      // Pop-ups blocked — fall back to direct SVG download so the user isn't stranded
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
+      const svgUrl  = URL.createObjectURL(svgBlob);
+      const a       = document.createElement('a');
+      a.href        = svgUrl;
+      a.download    = title.replace(/\s+/g, '-') + '.svg';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(svgUrl), 10000);
+    }
   }
 
   /**
-   * Download a printable background as an SVG file (opens in browser / OS print dialog).
-   * @param {'stripes'|'checkerboard'|'dotgrid'} pattern
+   * Download a printable background — opens a print-ready tab so the user
+   * can save it as PDF at 100% scale via the browser print dialog.
+   * @param {'crosshatch'|'stripes'|'checkerboard'|'dotgrid'} pattern
    */
   function downloadBackground(pattern) {
     let svgStr;
-    let filename;
+    let title;
     switch (pattern) {
       case 'checkerboard':
-        svgStr   = generateCheckerboardSVG();
-        filename = 'ClearCut-checkerboard.svg';
+        svgStr = generateCheckerboardSVG();
+        title  = 'ClearCut Checkerboard Background';
         break;
       case 'dotgrid':
-        svgStr   = generateDotGridSVG();
-        filename = 'ClearCut-dotgrid.svg';
+        svgStr = generateDotGridSVG();
+        title  = 'ClearCut Dot Grid Background';
         break;
       case 'stripes':
-        svgStr   = generateStripesSVG();
-        filename = 'ClearCut-stripes.svg';
+        svgStr = generateStripesSVG();
+        title  = 'ClearCut Stripes Background';
         break;
       default: // crosshatch
-        svgStr   = generateCrosshatchSVG();
-        filename = 'ClearCut-crosshatch.svg';
+        svgStr = generateCrosshatchSVG();
+        title  = 'ClearCut Crosshatch Background';
     }
 
-    const blob = svgToPdfBlob(svgStr);
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    openPrintTab(svgStr, title);
   }
 
   // ── Thumbnail previews ────────────────────────────────────────────────────
