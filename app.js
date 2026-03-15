@@ -90,6 +90,12 @@
   const elFftSensitivity = $('fft-sensitivity');
   const elFftSensVal     = $('fft-sensitivity-val');
 
+  // FFT debug panel
+  const elFftDebugPanel  = $('fft-debug-panel');
+  const elFftCanvasBefore = $('fft-canvas-before');
+  const elFftCanvasAfter  = $('fft-canvas-after');
+  const elFftDebugEmpty   = $('fft-debug-empty');
+
   // GrabCut controls
   const elGrabCutBar    = $('grabcut-bar');
   const elGrabCutBtn    = $('grabcut-btn');
@@ -453,7 +459,28 @@
         }
       } else if (state.method === 'B') {
         const pattern = elScanPattern.value;
-        contours = ClearCutCV.detectMethodB(state.images.scan, pattern, opts);
+        const useFFT  = elUseFFT ? elUseFFT.checked : true;
+        contours = ClearCutCV.detectMethodB(state.images.scan, pattern, {
+          ...opts,
+          fftDebugCanvasBefore: useFFT ? elFftCanvasBefore : null,
+          fftDebugCanvasAfter:  useFFT ? elFftCanvasAfter  : null,
+        });
+        // Show/hide the FFT debug panel based on whether FFT was used
+        if (elFftDebugPanel) {
+          if (useFFT) {
+            elFftDebugPanel.open = elFftDebugPanel.open; // keep current open/closed state
+            if (elFftDebugEmpty) elFftDebugEmpty.style.display = 'none';
+          } else {
+            if (elFftDebugEmpty) {
+              elFftDebugEmpty.textContent = 'FFT is disabled — enable it to see the spectrum.';
+              elFftDebugEmpty.style.display = '';
+            }
+            // Clear canvases
+            [elFftCanvasBefore, elFftCanvasAfter].forEach(c => {
+              if (c) { const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height); }
+            });
+          }
+        }
         state.activeImage = state.images.scan;
         state.itemsMat    = state.images.scan;
       } else {

@@ -553,6 +553,64 @@ footer p + p { margin-top: 8px; }
   cursor: pointer;
 }
 
+/* ── FFT debug panel ── */
+.fft-debug-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 4px;
+  width: 100%;
+}
+.fft-debug-panel summary {
+  padding: 9px 14px;
+  background: #f4f6fb;
+  cursor: pointer;
+  font-size: .88rem;
+  font-weight: 600;
+  user-select: none;
+}
+.fft-debug-panel summary:hover { background: #eef2f8; }
+.fft-debug-content {
+  padding: 14px;
+  background: #fff;
+}
+.fft-debug-canvases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+@media (max-width: 520px) {
+  .fft-debug-canvases { grid-template-columns: 1fr; }
+}
+.fft-canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.fft-canvas-label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+}
+.fft-canvas-wrap canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: #111;
+  display: block;
+  image-rendering: pixelated;
+}
+.fft-debug-empty {
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin: 8px 0 0;
+  text-align: center;
+}
+#ctrl-fft-debug-wrap { display: block; }
+
 /* ── GrabCut bar ── */
 .grabcut-bar {
   margin-top: 16px;

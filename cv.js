@@ -362,15 +362,46 @@ const ClearCutCV = (() => {
   }
 
   /**
+   * Render the log-magnitude spectrum of a complex DFT Mat to an HTMLCanvasElement.
+   * DC component is shifted to the centre. Rendered as a greyscale heatmap.
+   *
+   * @param {cv.Mat}           complexMat – 2-channel CV_32F unshifted DFT result
+   * @param {HTMLCanvasElement} canvas
+   */
+  function renderSpectrumToCanvas(complexMat, canvas) {
+    const mag = computeMagnitudeSpectrum(complexMat);  // log-scaled CV_32F
+    fftShift(mag);
+
+    // Normalise to 0-255 CV_8U
+    const norm = new cv.Mat();
+    cv.normalize(mag, norm, 0, 255, cv.NORM_MINMAX, cv.CV_8U);
+
+    // Convert to RGBA for ImageData
+    const rgba = new cv.Mat();
+    cv.cvtColor(norm, rgba, cv.COLOR_GRAY2RGBA);
+
+    canvas.width  = rgba.cols;
+    canvas.height = rgba.rows;
+    const ctx = canvas.getContext('2d');
+    const imgData = new ImageData(new Uint8ClampedArray(rgba.data), rgba.cols, rgba.rows);
+    ctx.putImageData(imgData, 0, 0);
+
+    mag.delete(); norm.delete(); rgba.delete();
+  }
+
+  /**
    * Remove a periodic background pattern from a grayscale image via FFT.
    * Returns a CV_8U binary mask where items are white.
    *
-   * @param {cv.Mat} grayMat      – single-channel CV_8U source
-   * @param {number} peakRadius   – zeroing radius around each frequency peak
-   * @param {number} sensitivity  – stddev sensitivity for peak detection
+   * @param {cv.Mat} grayMat        – single-channel CV_8U source
+   * @param {number} peakRadius     – zeroing radius around each frequency peak
+   * @param {number} sensitivity    – stddev sensitivity for peak detection
+   * @param {HTMLCanvasElement} [debugCanvasBefore] – if provided, receives the pre-suppression spectrum
+   * @param {HTMLCanvasElement} [debugCanvasAfter]  – if provided, receives the post-suppression spectrum
    * @returns {cv.Mat} binary mask (caller must delete)
    */
-  function removePatternFFT(grayMat, peakRadius = 12, sensitivity = 3) {
+  function removePatternFFT(grayMat, peakRadius = 12, sensitivity = 3,
+                            debugCanvasBefore = null, debugCanvasAfter = null) {
     // Pad to optimal DFT size
     const optW = cv.getOptimalDFTSize(grayMat.cols);
     const optH = cv.getOptimalDFTSize(grayMat.rows);
@@ -394,8 +425,18 @@ const ClearCutCV = (() => {
     // Forward DFT
     cv.dft(complexMat, complexMat, cv.DFT_COMPLEX_OUTPUT);
 
+    // Debug: render pre-suppression spectrum
+    if (debugCanvasBefore) {
+      renderSpectrumToCanvas(complexMat, debugCanvasBefore);
+    }
+
     // Suppress periodic peaks
     suppressPeriodicPeaks(complexMat, peakRadius, sensitivity);
+
+    // Debug: render post-suppression spectrum
+    if (debugCanvasAfter) {
+      renderSpectrumToCanvas(complexMat, debugCanvasAfter);
+    }
 
     // Inverse DFT — cv.idft is not exposed in OpenCV.js; use cv.dft with DFT_INVERSE instead
     const iDft = new cv.Mat();
@@ -451,6 +492,8 @@ const ClearCutCV = (() => {
       useFFT         = true,
       fftPeakRadius  = 12,
       fftSensitivity = 3,
+      fftDebugCanvasBefore = null,
+      fftDebugCanvasAfter  = null,
     } = options;
 
     const src  = imgToMat(scanImgEl);
@@ -461,7 +504,8 @@ const ClearCutCV = (() => {
 
     if (useFFT) {
       // FFT-based pattern removal
-      mask = removePatternFFT(gray, fftPeakRadius, fftSensitivity);
+      mask = removePatternFFT(gray, fftPeakRadius, fftSensitivity,
+                              fftDebugCanvasBefore, fftDebugCanvasAfter);
     } else {
       // Legacy Gaussian-blur heuristic
       const binary = new cv.Mat();

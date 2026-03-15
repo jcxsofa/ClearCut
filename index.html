@@ -279,6 +279,27 @@
             <span class="ctrl-hint">Stddevs above mean to classify a frequency spike as a pattern peak</span>
           </label>
 
+          <!-- FFT spectrum debug view -->
+          <div class="control-item" id="ctrl-fft-debug-wrap">
+            <details class="fft-debug-panel" id="fft-debug-panel">
+              <summary>🔬 FFT Spectrum Debug <span class="badge badge-b">B</span></summary>
+              <div class="fft-debug-content">
+                <p class="ctrl-hint">Run detection to see the frequency spectrum. Bright spots are pattern peaks — they should disappear after suppression.</p>
+                <div class="fft-debug-canvases">
+                  <div class="fft-canvas-wrap">
+                    <div class="fft-canvas-label">Before suppression</div>
+                    <canvas id="fft-canvas-before"></canvas>
+                  </div>
+                  <div class="fft-canvas-wrap">
+                    <div class="fft-canvas-label">After suppression</div>
+                    <canvas id="fft-canvas-after"></canvas>
+                  </div>
+                </div>
+                <p class="fft-debug-empty" id="fft-debug-empty">Run detection (Method B with FFT enabled) to populate these.</p>
+              </div>
+            </details>
+          </div>
+
           <label class="control-item">
             <span>Outline color</span>
             <div class="outline-color-row">
