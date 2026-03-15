@@ -46,6 +46,16 @@
   const elCtxPadVal    = $('ctrl-padding-val');
   const elCtxMinArea   = $('ctrl-min-area');
   const elCtxMinAreaVal = $('ctrl-min-area-val');
+  const elCtxMaxShapes  = $('ctrl-max-shapes');
+  const elCtxMaxShapesVal = $('ctrl-max-shapes-val');
+  const elCtxSmooth     = $('ctrl-smooth');
+  const elCtxSmoothVal  = $('ctrl-smooth-val');
+  const elCtxMorph      = $('ctrl-morph');
+  const elCtxMorphVal   = $('ctrl-morph-val');
+  const elCtxBlur       = $('ctrl-blur');
+  const elCtxBlurVal    = $('ctrl-blur-val');
+  const elCtxOutlineColor = $('ctrl-outline-color');
+  const elSvgStrokeWidth  = $('svg-stroke-width');
 
   const elBtnDetectA   = $('btn-detect-a');
   const elBtnDetectB   = $('btn-detect-b');
@@ -275,6 +285,21 @@
   elCtxMinArea.addEventListener('input', () => {
     elCtxMinAreaVal.textContent = elCtxMinArea.value + ' px²';
   });
+  elCtxMaxShapes.addEventListener('input', () => {
+    elCtxMaxShapesVal.textContent = elCtxMaxShapes.value;
+  });
+  elCtxSmooth.addEventListener('input', () => {
+    elCtxSmoothVal.textContent = elCtxSmooth.value + ' px';
+  });
+  elCtxMorph.addEventListener('input', () => {
+    elCtxMorphVal.textContent = elCtxMorph.value + ' px';
+  });
+  elCtxBlur.addEventListener('input', () => {
+    elCtxBlurVal.textContent = elCtxBlur.value + ' px';
+  });
+  elCtxOutlineColor.addEventListener('input', () => {
+    if (state.activeImage && state.contours.length) renderPreview();
+  });
   elColorTol.addEventListener('input', () => {
     elColorTolVal.textContent = elColorTol.value;
   });
@@ -293,7 +318,9 @@
     return {
       threshold:    Number(elCtxThreshold.value),
       minArea:      Number(elCtxMinArea.value),
-      smoothEpsilon: 2,
+      smoothEpsilon: Number(elCtxSmooth.value),
+      morphKernel:  Number(elCtxMorph.value),
+      blurRadius:   Number(elCtxBlur.value),
     };
   }
 
@@ -330,6 +357,12 @@
         const tolerance = Number(elColorTol.value);
         contours = ClearCutCV.detectMethodC(state.images.solid, bgColor, tolerance, opts);
         state.activeImage = state.images.solid;
+      }
+
+      // Apply max shapes cap (contours are already sorted by area desc)
+      const maxShapes = Number(elCtxMaxShapes.value);
+      if (contours.length > maxShapes) {
+        contours = contours.slice(0, maxShapes);
       }
 
       state.contours = contours;
@@ -379,9 +412,10 @@
 
   function renderPreview() {
     if (!state.activeImage) return;
-    const paddingPx = getPaddingPx();
+    const paddingPx    = getPaddingPx();
+    const outlineColor = elCtxOutlineColor?.value || '#00ff66';
     state.previewRatio = ClearCutSVG.drawPreview(
-      elCanvas, state.activeImage, state.contours, paddingPx, state.hoverIdx ?? null
+      elCanvas, state.activeImage, state.contours, paddingPx, state.hoverIdx ?? null, outlineColor
     );
   }
 
@@ -527,13 +561,14 @@
 
     const imgW    = state.activeImage.naturalWidth  || state.activeImage.width;
     const imgH    = state.activeImage.naturalHeight || state.activeImage.height;
-    const sheetWIn = Number(elSheetW.value) || 8.5;
-    const sheetHIn = Number(elSheetH.value) || 11;
-    const paddingMm = Number(elCtxPadding.value) || 0;
+    const sheetWIn    = Number(elSheetW.value) || 8.5;
+    const sheetHIn    = Number(elSheetH.value) || 11;
+    const paddingMm   = Number(elCtxPadding.value) || 0;
+    const strokeWidth = elSvgStrokeWidth ? elSvgStrokeWidth.value : '0.01';
 
     try {
       const svgStr = ClearCutSVG.generateSVG(
-        state.contours, imgW, imgH, sheetWIn, sheetHIn, paddingMm
+        state.contours, imgW, imgH, sheetWIn, sheetHIn, paddingMm, strokeWidth
       );
       ClearCutSVG.downloadSVG(svgStr);
       showStatus(`✅ Downloaded SVG with ${enabled.length} shape${enabled.length !== 1 ? 's' : ''}.`);

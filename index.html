@@ -223,7 +223,49 @@
           <input type="range" id="ctrl-min-area" min="100" max="5000" value="500" step="100" />
           <span id="ctrl-min-area-val">500 px²</span>
         </label>
+        <label class="control-item">
+          <span>Max shapes</span>
+          <input type="range" id="ctrl-max-shapes" min="1" max="200" value="100" step="1" />
+          <span id="ctrl-max-shapes-val">100</span>
+        </label>
       </div>
+
+      <!-- ── Advanced controls ── -->
+      <details class="advanced-panel" id="advanced-panel">
+        <summary>⚙️ Advanced options</summary>
+        <div class="advanced-grid">
+
+          <label class="control-item">
+            <span>Contour smoothing</span>
+            <input type="range" id="ctrl-smooth" min="1" max="20" value="2" step="1" />
+            <span id="ctrl-smooth-val">2 px</span>
+            <span class="ctrl-hint">Higher = fewer vertices, simpler curves</span>
+          </label>
+
+          <label class="control-item">
+            <span>Noise cleanup</span>
+            <input type="range" id="ctrl-morph" min="1" max="15" value="5" step="1" />
+            <span id="ctrl-morph-val">5 px</span>
+            <span class="ctrl-hint">Morphological kernel — removes speckle &amp; fills gaps</span>
+          </label>
+
+          <label class="control-item" id="ctrl-blur-wrap">
+            <span>Pattern blur radius <span class="method-tag">B</span></span>
+            <input type="range" id="ctrl-blur" min="10" max="80" value="25" step="5" />
+            <span id="ctrl-blur-val">25 px</span>
+            <span class="ctrl-hint">Low-pass blur to separate items from the printed background</span>
+          </label>
+
+          <label class="control-item">
+            <span>Outline color</span>
+            <div class="outline-color-row">
+              <input type="color" id="ctrl-outline-color" value="#00ff66" />
+              <span class="ctrl-hint">Preview overlay color</span>
+            </div>
+          </label>
+
+        </div>
+      </details>
 
       <div class="canvas-container" id="canvas-container">
         <canvas id="preview-canvas"></canvas>
@@ -269,6 +311,14 @@
             <option value="12x12">Cricut Mat (12" × 12")</option>
             <option value="custom">Custom…</option>
           </select>
+        </label>
+        <label class="control-item">
+          <span>SVG stroke width</span>
+          <div class="input-with-unit">
+            <input type="number" id="svg-stroke-width" value="0.01" min="0.001" max="0.1" step="0.005" />
+            <span>inches</span>
+          </div>
+          <span class="ctrl-hint">0.01" = Cricut standard cut line</span>
         </label>
       </div>
 

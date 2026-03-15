@@ -46,17 +46,20 @@ const ClearCutCV = (() => {
    */
   function extractContours(mask, options = {}) {
     const {
-      minArea       = 500,
-      smoothEpsilon = 2.0,   // approxPolyDP epsilon in pixels
+      minArea        = 500,
+      smoothEpsilon  = 2.0,   // approxPolyDP epsilon in pixels
+      morphKernel    = 5,     // base kernel radius for open/close operations
     } = options;
 
-    // Close small holes
-    const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(9, 9));
-    const closed = new cv.Mat();
+    // Close small holes — kernel is 2× the base (fills gaps inside items)
+    const closeSize = Math.max(3, morphKernel * 2 - 1) | 1;  // keep odd
+    const kernel  = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(closeSize, closeSize));
+    const closed  = new cv.Mat();
     cv.morphologyEx(mask, closed, cv.MORPH_CLOSE, kernel);
 
-    // Remove noise
-    const kernel2 = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5));
+    // Remove noise — kernel is 1× the base
+    const openSize  = Math.max(3, morphKernel) | 1;  // keep odd
+    const kernel2 = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(openSize, openSize));
     const opened  = new cv.Mat();
     cv.morphologyEx(closed, opened, cv.MORPH_OPEN, kernel2);
 
@@ -190,7 +193,7 @@ const ClearCutCV = (() => {
    * @returns {Array} contours
    */
   function detectMethodA(bgImgEl, itemsImgEl, options = {}) {
-    const { threshold = 30, minArea = 500, smoothEpsilon = 2 } = options;
+    const { threshold = 30, minArea = 500, smoothEpsilon = 2, morphKernel = 5 } = options;
 
     const bgMat    = imgToMat(bgImgEl);
     const itemsMat = imgToMat(itemsImgEl);
@@ -218,7 +221,7 @@ const ClearCutCV = (() => {
     const mask = new cv.Mat();
     cv.threshold(diffGray, mask, threshold, 255, cv.THRESH_BINARY);
 
-    const contours = extractContours(mask, { minArea, smoothEpsilon });
+    const contours = extractContours(mask, { minArea, smoothEpsilon, morphKernel });
 
     // Clean up
     [bgResized, itemsMat, diff, diffGray, mask].forEach(m => {
@@ -250,7 +253,7 @@ const ClearCutCV = (() => {
    * @param {object} options
    */
   function detectMethodB(scanImgEl, pattern, options = {}) {
-    const { threshold = 30, minArea = 500, smoothEpsilon = 2 } = options;
+    const { threshold = 30, minArea = 500, smoothEpsilon = 2, morphKernel = 5, blurRadius = 25 } = options;
 
     const src  = imgToMat(scanImgEl);
     const gray = new cv.Mat();
@@ -260,18 +263,16 @@ const ClearCutCV = (() => {
     const binary = new cv.Mat();
     cv.adaptiveThreshold(gray, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 8);
 
-    // Step 2: Estimate "background pattern" by heavily blurring (large median blur)
-    // The repeating pattern averages out to mid-grey; solid items stay solid.
-    // Use a large Gaussian blur as a low-pass filter to separate background pattern from items.
+    // Step 2: Large Gaussian blur as a low-pass filter to separate background pattern from items.
     const blurred = new cv.Mat();
-    const bigKernel = new cv.Size(51, 51);   // must be odd
-    cv.GaussianBlur(binary, blurred, bigKernel, 0);
+    const kernelSize = Math.max(11, blurRadius * 2 + 1) | 1;  // keep odd, minimum 11
+    cv.GaussianBlur(binary, blurred, new cv.Size(kernelSize, kernelSize), 0);
 
     // Threshold the blurred result to isolate "item" regions (areas of high local density)
     const mask = new cv.Mat();
     cv.threshold(blurred, mask, threshold, 255, cv.THRESH_BINARY);
 
-    const contours = extractContours(mask, { minArea, smoothEpsilon });
+    const contours = extractContours(mask, { minArea, smoothEpsilon, morphKernel });
 
     [src, gray, binary, blurred, mask].forEach(m => { try { m.delete(); } catch (_) {} });
     return contours;
@@ -287,7 +288,7 @@ const ClearCutCV = (() => {
    * @param {object}           options
    */
   function detectMethodC(imgEl, bgColor, tolerance, options = {}) {
-    const { minArea = 500, smoothEpsilon = 2 } = options;
+    const { minArea = 500, smoothEpsilon = 2, morphKernel = 5 } = options;
 
     const src = imgToMat(imgEl);
     const hsv = new cv.Mat();
@@ -355,7 +356,7 @@ const ClearCutCV = (() => {
     const itemsMask = new cv.Mat();
     cv.bitwise_not(mask, itemsMask);
 
-    const contours = extractContours(itemsMask, { minArea, smoothEpsilon });
+    const contours = extractContours(itemsMask, { minArea, smoothEpsilon, morphKernel });
 
     [src, hsv, mask, itemsMask].forEach(m => { try { m.delete(); } catch (_) {} });
     return contours;

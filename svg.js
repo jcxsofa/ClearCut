@@ -85,9 +85,10 @@ const ClearCutSVG = (() => {
    * @param {number} sheetWIn    – physical sheet width in inches
    * @param {number} sheetHIn    – physical sheet height in inches
    * @param {number} paddingMm   – outward padding in mm (applied before scaling)
+   * @param {string} strokeWidth – SVG stroke-width value, e.g. "0.01in" (default: Cricut standard)
    * @returns {string}           – SVG string ready to save as .svg
    */
-  function generateSVG(contours, imageW, imageH, sheetWIn, sheetHIn, paddingMm = 0) {
+  function generateSVG(contours, imageW, imageH, sheetWIn, sheetHIn, paddingMm = 0, strokeWidth = '0.01') {
     // Compute px per inch based on the sheet width
     const pxPerInch = imageW / sheetWIn;
 
@@ -96,6 +97,10 @@ const ClearCutSVG = (() => {
 
     // Padding in pixels
     const paddingPx = paddingMm > 0 ? (paddingMm / 25.4) * pxPerInch : 0;
+
+    // Stroke width — normalise: if the value has no unit, append "in"
+    const strokeVal = String(strokeWidth).trim();
+    const strokeAttr = /[a-z%]/.test(strokeVal) ? strokeVal : strokeVal + 'in';
 
     // Final SVG canvas dimensions — fit sheet inside the 12×12 mat
     const sheetSVGW = (sheetWIn  * SVG_DPI).toFixed(3);
@@ -113,7 +118,7 @@ const ClearCutSVG = (() => {
     d="${d}"
     fill="none"
     stroke="#000000"
-    stroke-width="0.01in"
+    stroke-width="${strokeAttr}"
     vector-effect="non-scaling-stroke"
   />`;
       })
@@ -170,12 +175,13 @@ ${paths}
    * Draw contour outlines onto a canvas, overlaid on the source image.
    *
    * @param {HTMLCanvasElement}  canvas
-   * @param {HTMLImageElement}   imgEl      – source image to draw as background
-   * @param {Array}              contours   – contour objects
-   * @param {number}             paddingPx  – padding already applied (for display)
-   * @param {number|null}        hoverIdx   – index of hovered contour (or null)
+   * @param {HTMLImageElement}   imgEl        – source image to draw as background
+   * @param {Array}              contours     – contour objects
+   * @param {number}             paddingPx    – padding already applied (for display)
+   * @param {number|null}        hoverIdx     – index of hovered contour (or null)
+   * @param {string}             outlineColor – CSS color for enabled contours
    */
-  function drawPreview(canvas, imgEl, contours, paddingPx = 0, hoverIdx = null) {
+  function drawPreview(canvas, imgEl, contours, paddingPx = 0, hoverIdx = null, outlineColor = '#00ff66') {
     // Fit canvas to container
     const container = canvas.parentElement;
     const maxW      = container ? container.clientWidth  : 680;
@@ -213,7 +219,7 @@ ${paths}
         ctx.lineWidth   = 3;
         ctx.setLineDash([]);
       } else {
-        ctx.strokeStyle = '#00ff66';
+        ctx.strokeStyle = outlineColor;
         ctx.lineWidth   = 2;
         ctx.setLineDash([]);
       }
