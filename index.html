@@ -73,7 +73,7 @@
 
       <div class="upload-grid-two">
         <div class="upload-zone" id="drop-bg" data-target="bg">
-          <input type="file" id="input-bg" accept="image/*" />
+          <input type="file" id="input-bg" accept="image/*,.pdf,application/pdf" />
           <div class="upload-icon">📷</div>
           <div class="upload-label">
             <strong>Background photo</strong>
@@ -87,7 +87,7 @@
         </div>
 
         <div class="upload-zone" id="drop-items" data-target="items">
-          <input type="file" id="input-items" accept="image/*" />
+          <input type="file" id="input-items" accept="image/*,.pdf,application/pdf" />
           <div class="upload-icon">📷</div>
           <div class="upload-label">
             <strong>Items photo</strong>
@@ -139,7 +139,7 @@
 
       <!-- Upload zone -->
       <div class="upload-zone mt" id="drop-scan" data-target="scan">
-        <input type="file" id="input-scan" accept="image/*" />
+        <input type="file" id="input-scan" accept="image/*,.pdf,application/pdf" />
         <div class="upload-icon">📄</div>
         <div class="upload-label">
           <strong>Upload your scan</strong>
@@ -173,7 +173,7 @@
       <p class="hint">Place your items on a solid-colored surface (e.g. bright green or red paper).</p>
 
       <div class="upload-zone" id="drop-solid" data-target="solid">
-        <input type="file" id="input-solid" accept="image/*" />
+        <input type="file" id="input-solid" accept="image/*,.pdf,application/pdf" />
         <div class="upload-icon">🖼️</div>
         <div class="upload-label">
           <strong>Upload image</strong>
@@ -415,6 +415,15 @@
       }
     };
   </script>
+  <!-- PDF.js — renders PDFs to canvas so they can be fed into the CV pipeline -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+
   <script async src="https://docs.opencv.org/4.x/opencv.js" onerror="handleCvError()"></script>
   <script>
     function handleCvError() {

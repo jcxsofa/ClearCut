@@ -180,21 +180,63 @@
 
   // ── Image upload helpers ──────────────────────────────────────────────────
 
-  function loadImageFile(file) {
-    return new Promise((resolve, reject) => {
-      if (!file || !file.type.startsWith('image/')) {
-        reject(new Error('Not an image file.'));
+  /**
+   * Convert any user-selected file (image or PDF) to a data URL.
+   * For PDFs, PDF.js renders page 1 to an offscreen canvas at 2× scale
+   * and returns it as a PNG data URL — transparent to the rest of the pipeline.
+   */
+  function fileToDataURL(file) {
+    return new Promise(async (resolve, reject) => {
+      const isPDF = file.type === 'application/pdf' ||
+                    file.name.toLowerCase().endsWith('.pdf');
+
+      if (isPDF) {
+        if (!window.pdfjsLib) {
+          reject(new Error('PDF.js is not loaded. Cannot open PDF files.'));
+          return;
+        }
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf         = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const page        = await pdf.getPage(1); // first page only
+          const viewport    = page.getViewport({ scale: 2.0 }); // 2× for CV detail
+          const offscreen   = document.createElement('canvas');
+          offscreen.width   = viewport.width;
+          offscreen.height  = viewport.height;
+          const ctx         = offscreen.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          resolve(offscreen.toDataURL('image/png'));
+        } catch (err) {
+          reject(new Error('Failed to render PDF: ' + err.message));
+        }
         return;
       }
+
+      // Regular image file — use FileReader as before
       const reader = new FileReader();
-      reader.onload = e => {
-        const img  = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('Failed to decode image.'));
-        img.src = e.target.result;
-      };
+      reader.onload  = e => resolve(e.target.result);
       reader.onerror = () => reject(new Error('Failed to read file.'));
       reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImageFile(file) {
+    return new Promise(async (resolve, reject) => {
+      const isPDF = file.type === 'application/pdf' ||
+                    file.name.toLowerCase().endsWith('.pdf');
+      if (!isPDF && !file.type.startsWith('image/')) {
+        reject(new Error('Unsupported file type. Please upload an image or PDF.'));
+        return;
+      }
+      try {
+        const dataURL = await fileToDataURL(file);
+        const img     = new Image();
+        img.onload    = () => resolve(img);
+        img.onerror   = () => reject(new Error('Failed to decode image.'));
+        img.src       = dataURL;
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 
